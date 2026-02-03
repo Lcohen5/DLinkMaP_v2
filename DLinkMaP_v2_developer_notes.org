@@ -1,0 +1,144 @@
+Last update by Logan Cohen on Feb 2, 2026
+
+* Directory Layout
+DLinkMaP_v2/
+  README.md
+  renv.lock / DESCRIPTION      # optional, but recommended
+  .gitignore
+
+  config/
+    params.csv                 # one run config (paths + options)
+    schemas/
+      phenotype_required_cols.txt
+
+  data/
+    phenotypes/                # cleaned phenotype CSVs (not committed)
+      tg.csv
+      pc1_tg.csv
+
+  src/
+    dlinkmap/                  # code you copy from DLinkMaP (the engine)
+      mapping/
+        MAP_general.R
+        MAPFun_general.R
+        FUN.R
+        gradMM.R
+        MM_Process.R
+        QC.R
+        QTL_Process.R
+        NullSetUpBla_TG_Trehalose_Weights.R
+      # (no parallelizer)
+
+    v2/                        # your glue code (small, readable)
+      validate_input.R
+      run_null.R
+      run_map.R
+      run_all.R
+      utils.R
+
+  outputs/
+    nulls/                     # null .RData (not committed)
+    qtl/                       # mapping outputs (not committed)
+    logs/                      # logs (not committed)
+
+  tests/
+    smoke_test.R               # optional
+
+* Developer Notes
+1. Created a clean repository to run DLinkMaP with explicit assumptions and reproducible inputs, without modifying the original codebase.
+
+2. Created directory structure:
+   #+begin_src sh
+   mkdir -p DLinkMaP_v2/{config/schemas,data/phenotypes,src/dlinkmap/mapping,src/v2,outputs/{nulls,qtl,logs},tests}
+   #+end_src
+
+3. Copied mapping and null-generation scripts verbatim from the original DLinkMaP repository into the new repo:
+   #+begin_src sh
+   cp DLinkMaP/mapping/{MAP_general.R,MAPFun_general.R,FUN.R,gradMM.R,MM_Process.R,QC.R,QTL_Process.R,NullSetUpBla_TG_Trehalose_Weights.R} \
+     DLinkMaP_v2/src/dlinkmap/mapping/
+   #+end_src
+
+   No scientific logic was changed. These files are treated as the analysis engine.
+
+4. Added =.gitignore= to prevent committing raw data, outputs, and R artifacts:
+   #+begin_src gitignore
+   data/phenotypes/
+   outputs/
+   *.RData
+   *.Rhistory
+   .Rproj.user/
+   #+end_src
+
+5. Created a params file template to standardize run configuration and replace implicit filename coupling used in the original pipeline.
+
+   Created file:
+   =config/params_template.csv=
+
+   #+begin_src csv
+   commDir,fileName,phenotype,outDir,nullDir,nullFile,seed
+   REPLACE_COMM_DIR,REPLACE_PHENO_FILE,tg,REPLACE_OUT_DIR,REPLACE_NULL_DIR,REPLACE_NULL_FILE,1
+   #+end_src
+
+   Each QTL run uses one params file derived from this template.
+
+6. Inspected example phenotype files in the original DLinkMaP repository and found inconsistent header conventions by phenotype type.
+
+   TG / plate-based phenotype files use space-separated headers:
+   #+begin_src text
+   vial, cross type, female line, male line, food type, month crossed, cross number, plate, y
+   #+end_src
+
+   Weight / averaged-by-vial phenotype files use dot-separated headers:
+   #+begin_src text
+   vial, cross.type, female.line, male.line, food.type, month.crossed, cross.number, number.weighed, y
+   #+end_src
+
+7. Identified the actual required phenotype columns by inspecting:
+   - the repo’s own formatted phenotype files
+   - =NullSetUpBla_TG_Trehalose_Weights.R=
+   - mapping scripts that reference phenotype columns
+
+8. Chose a single canonical header convention (dot-separated names) to eliminate ambiguity and R parsing issues.
+
+   Canonical schema:
+   #+begin_src text
+   vial
+   cross.type
+   female.line
+   male.line
+   food.type
+   month.crossed
+   cross.number
+   y
+   #+end_src
+
+   Plus exactly one of:
+   - =plate= (plate-based assays: TG, trehalose)
+   - =number.weighed= (weight / averaged phenotypes)
+
+9. Established a clear data layout in the new repository:
+   - raw/reference inputs (read-only)
+   - cleaned, standardized phenotype CSVs used by the pipeline
+
+10. Copied a known-good TG phenotype file from the original repository into the new repo as a raw reference:
+    #+begin_src text
+    data/raw/TG_data_updated_5_8_13_formatted.csv
+    #+end_src
+
+11. Wrote a small formatter script in the new repository to:
+    - rename space-based headers to dot-based headers
+    - validate that all required columns are present
+    - write a standardized phenotype CSV
+
+12. Generated a clean, standardized TG phenotype file that matches the expectations of the null and mapping scripts:
+    #+begin_src text
+    DLinkMaP_v2/data/phenotypes_clean/tg_formatted_dots.csv
+    #+end_src
+
+    This file is derived directly from the original TG dataset and uses the canonical schema.
+
+13. Ensured throughout that:
+    - the original DLinkMaP repository remains untouched
+    - all assumptions are explicit
+    - provenance is preserved
+    - data normalization is separated from modeling
